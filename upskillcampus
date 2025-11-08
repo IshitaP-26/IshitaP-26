@@ -1,0 +1,307 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, r2_score
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime
+import json
+
+class ManufacturingDataPipeline:
+    """Handles data ingestion, validation, and cleaning for manufacturing data"""
+    
+    def _init_(self, data_source):
+        self.data_source = data_source
+        self.data = None
+        self.validated_data = None
+        
+    def load_data(self):
+        """Load data from CSV or real-time source"""
+        try:
+            self.data = pd.read_csv(self.data_source)
+            print(f"✓ Data loaded successfully: {self.data.shape[0]} rows, {self.data.shape[1]} columns")
+            return True
+        except Exception as e:
+            print(f"✗ Error loading data: {e}")
+            return False
+    
+    def validate_data(self):
+        """Validate data format and check for inconsistencies"""
+        if self.data is None:
+            print("✗ No data to validate")
+            return False
+        
+        # Check for missing values
+        missing = self.data.isnull().sum()
+        print(f"
+📊 Missing Values:
+{missing[missing > 0]}")
+        
+        # Check data types
+        print(f"
+ Data Types:
+{self.data.dtypes}")
+        
+        # Remove rows with critical missing values
+        critical_cols = ['timestamp', 'stage', 'temperature', 'pressure', 'flow_rate']
+        self.validated_data = self.data.dropna(subset=critical_cols)
+        
+        print(f"
+ Validation complete: {self.validated_data.shape[0]} valid rows")
+        return True
+    
+    def clean_data(self):
+        """Clean and preprocess data"""
+        if self.validated_data is None:
+            print("✗ No validated data to clean")
+            return False
+        
+        # Handle outliers using IQR method
+        numeric_cols = self.validated_data.select_dtypes(include=[np.number]).columns
+        
+        for col in numeric_cols:
+            Q1 = self.validated_data[col].quantile(0.25)
+            Q3 = self.validated_data[col].quantile(0.75)
+            IQR = Q3 - Q1
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
+            
+            # Cap outliers
+            self.validated_data[col] = self.validated_data[col].clip(lower_bound, upper_bound)
+        
+        print("✓ Data cleaning complete")
+        return self.validated_data
+
+
+class PredictiveAnalytics:
+    """Implements predictive models for manufacturing optimization"""
+    
+    def _init_(self, data):
+        self.data = data
+        self.model = None
+        self.X_train = None
+        self.X_test = None
+        self.y_train = None
+        self.y_test = None
+        
+    def prepare_features(self, target_column='production_output'):
+        """Prepare features and target for modeling"""
+        # Select relevant features
+        feature_cols = ['temperature', 'pressure', 'flow_rate', 
+                       'viscosity', 'speed', 'stage_duration']
+        
+        X = self.data[feature_cols]
+        y = self.data[target_column]
+        
+        # Split data
+        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
+        
+        print(f"✓ Features prepared: {self.X_train.shape[1]} features, {self.X_train.shape[0]} training samples")
+        
+    def train_model(self):
+        """Train Random Forest model for production prediction"""
+        print("
+ Training predictive model...")
+        
+        self.model = RandomForestRegressor(
+            n_estimators=100,
+            max_depth=10,
+            random_state=42,
+            n_jobs=-1
+        )
+        
+        self.model.fit(self.X_train, self.y_train)
+        print("✓ Model training complete")
+        
+    def evaluate_model(self):
+        """Evaluate model performance"""
+        if self.model is None:
+            print("✗ Model not trained yet")
+            return
+        
+        # Predictions
+        y_pred_train = self.model.predict(self.X_train)
+        y_pred_test = self.model.predict(self.X_test)
+        
+        # Metrics
+        train_rmse = np.sqrt(mean_squared_error(self.y_train, y_pred_train))
+        test_rmse = np.sqrt(mean_squared_error(self.y_test, y_pred_test))
+        train_r2 = r2_score(self.y_train, y_pred_train)
+        test_r2 = r2_score(self.y_test, y_pred_test)
+        
+        print(f"📈 Model Performance:")
+        print(f"Training RMSE: {train_rmse:.4f}")
+        print(f"Testing RMSE: {test_rmse:.4f}")
+        print(f"Training R²: {train_r2:.4f}")
+        print(f"Testing R²: {test_r2:.4f}")
+        
+        return {
+            'train_rmse': train_rmse,
+            'test_rmse': test_rmse,
+            'train_r2': train_r2,
+            'test_r2': test_r2
+        }
+    
+    def feature_importance(self):
+        """Display feature importance"""
+        if self.model is None:
+            return
+        
+        importances = pd.DataFrame({
+            'feature': self.X_train.columns,
+            'importance': self.model.feature_importances_
+        }).sort_values('importance', ascending=False)
+        
+        print(f"
+🎯 Feature Importance:")
+        print(importances)
+        
+        return importances
+
+
+class Visualization:
+    """Generate visualizations for manufacturing data analysis"""
+    
+    @staticmethod
+    def plot_production_trends(data, save_path='production_trends.png'):
+        """Plot production trends over time"""
+        plt.figure(figsize=(12, 6))
+        
+        data['timestamp'] = pd.to_datetime(data['timestamp'])
+        daily_production = data.groupby(data['timestamp'].dt.date)['production_output'].mean()
+        
+        plt.plot(daily_production.index, daily_production.values, linewidth=2)
+        plt.title('Daily Production Output Trends', fontsize=16, fontweight='bold')
+        plt.xlabel('Date', fontsize=12)
+        plt.ylabel('Average Production Output', fontsize=12)
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"✓ Production trends plot saved: {save_path}")
+        plt.close()
+    
+    @staticmethod
+    def plot_correlation_matrix(data, save_path='correlation_matrix.png'):
+        """Plot correlation matrix for key variables"""
+        plt.figure(figsize=(10, 8))
+        
+        numeric_cols = ['temperature', 'pressure', 'flow_rate', 
+                       'viscosity', 'speed', 'production_output']
+        correlation = data[numeric_cols].corr()
+        
+        sns.heatmap(correlation, annot=True, cmap='coolwarm', 
+                   center=0, square=True, linewidths=1)
+        plt.title('Feature Correlation Matrix', fontsize=16, fontweight='bold')
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"✓ Correlation matrix saved: {save_path}")
+        plt.close()
+    
+    @staticmethod
+    def plot_stage_comparison(data, save_path='stage_comparison.png'):
+        """Compare production across manufacturing stages"""
+        plt.figure(figsize=(10, 6))
+        
+        stage_output = data.groupby('stage')['production_output'].mean().sort_values()
+        
+        plt.barh(stage_output.index, stage_output.values, color='steelblue')
+        plt.title('Average Production Output by Stage', fontsize=16, fontweight='bold')
+        plt.xlabel('Average Output', fontsize=12)
+        plt.ylabel('Manufacturing Stage', fontsize=12)
+        plt.grid(axis='x', alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"✓ Stage comparison plot saved: {save_path}")
+        plt.close()
+
+
+def generate_sample_data(filename='manufacturing_data.csv', num_rows=1000):
+    """Generate sample manufacturing data for demonstration"""
+    np.random.seed(42)
+    
+    stages = ['Stage_1', 'Stage_2', 'Stage_3', 'Stage_4', 'Stage_5']
+    
+    data = {
+        'timestamp': pd.date_range('2025-01-01', periods=num_rows, freq='H'),
+        'stage': np.random.choice(stages, num_rows),
+        'temperature': np.random.normal(180, 15, num_rows),
+        'pressure': np.random.normal(5.5, 0.8, num_rows),
+        'flow_rate': np.random.normal(45, 8, num_rows),
+        'viscosity': np.random.normal(3.2, 0.5, num_rows),
+        'speed': np.random.normal(1200, 150, num_rows),
+        'stage_duration': np.random.normal(30, 5, num_rows)
+    }
+    
+    # Generate production output with realistic relationship
+    data['production_output'] = (
+        0.5 * data['temperature'] + 
+        10 * data['pressure'] + 
+        0.8 * data['flow_rate'] + 
+        5 * data['viscosity'] + 
+        0.02 * data['speed'] +
+        np.random.normal(0, 20, num_rows)
+    )
+    
+    df = pd.DataFrame(data)
+    df.to_csv(filename, index=False)
+    print(f"✓ Sample data generated: {filename}")
+    return filename
+
+
+def main():
+    """Main execution pipeline"""
+    print("=" * 60)
+    print("USC_TIA Manufacturing Data Analysis Pipeline")
+    print("=" * 60)
+    
+    # Generate sample data (remove this in production)
+    data_file = generate_sample_data()
+    
+    # Step 1: Data Pipeline
+    print("
+[Step 1: Data Pipeline]")
+    pipeline = ManufacturingDataPipeline(data_file)
+    pipeline.load_data()
+    pipeline.validate_data()
+    clean_data = pipeline.clean_data()
+    
+    # Step 2: Predictive Analytics
+    print("
+[Step 2: Predictive Analytics]")
+    analytics = PredictiveAnalytics(clean_data)
+    analytics.prepare_features()
+    analytics.train_model()
+    metrics = analytics.evaluate_model()
+    importance = analytics.feature_importance()
+    
+    # Step 3: Visualization
+    print("
+[Step 3: Visualization]")
+    Visualization.plot_production_trends(clean_data)
+    Visualization.plot_correlation_matrix(clean_data)
+    Visualization.plot_stage_comparison(clean_data)
+    
+    # Save results
+    print("
+[Step 4: Save Results]")
+    results = {
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'metrics': metrics,
+        'top_features': importance.head(3).to_dict('records')
+    }
+    
+    with open('analysis_results.json', 'w') as f:
+        json.dump(results, f, indent=4)
+    print("✓ Results saved: analysis_results.json")
+    
+    print("
+" + "=" * 60)
+    print("Analysis Complete!")
+    print("=" * 60)
+
+
+if _name_ == "_main_":
+    main()
