@@ -1,1 +1,22 @@
+Task1-Android-App
+│
+├── app
+│   └── src
+│       └── main
+│           ├── java
+│           │   └── com
+│           │       └── example
+│           │           └── task1app
+│           │               └── MainActivity.kt
+│           │
+│           ├── AndroidManifest.xml
+│           │
+│           └── res
+│               └── values
+│                   └── themes.xml
+│
+├── build.gradle
+├── settings.gradle
+├── gradle.properties
+└── README.md
 
