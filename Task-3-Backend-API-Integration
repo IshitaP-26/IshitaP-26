@@ -1,0 +1,21 @@
+# Task 3 – Backend Integration & API Development
+
+## Internship: ApexPlanet Software Pvt. Ltd.
+
+### Description
+This Android application demonstrates backend integration using REST API.
+The app fetches data from an API and displays it in the UI.
+
+### Features
+- API integration using Retrofit
+- JSON data parsing
+- Error handling
+- Clean UI
+
+### Technologies Used
+- Java
+- Android Studio
+- Retrofit
+- REST API
+
+
